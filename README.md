@@ -80,8 +80,10 @@ curl -X POST https://your-api-endpoint.execute-api.region.amazonaws.com/prod/tra
 
 ## 🧑💻 Contributors
 
-- *Aditya (Pipeline Jedi)* – Wrote 90% of the code during a weekend, fueled by 17 espressos.
-- *AWS Documentation* – The other 10%.
+- Thanks to Amazon Q developer as my personal assistant, I managed to complete this project though more
+contributions are welcome.
+At the momenet I am currently optimizing this project amd building it as an entreprise system with more features,
+stay tuned to my profile as you might be in awe😉
 
 ## 📜 License
 
