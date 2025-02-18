@@ -74,7 +74,7 @@ curl -X POST https://your-api-endpoint.execute-api.region.amazonaws.com/prod/tra
 > "We deployed this after losing $20k/month or if you are in South Africa around R400k😭😮‍💨 to fraud. Now our false positives are down 40%, and DevOps hasn’t yelled about costs once."  
 > – Some Very Relieved CTO<<<<This woukd be a great testamanst by the way 😃😉
 
-- *SageMaker Endpoint Autoscaling:* Handles Black Friday traffic spikes without breaking a sweat.
+- *SageMaker Endpoint Autoscaling:* Handles Black Friday traffic spikes without breaking a sweat. [My next project is to build thjs end endpoint via AWS Sagemaker and an ensemble Bedrock foundation Model]
 - *Kinesis On-Demand:* Pay per usage, not for 24/7 streams. Perfect for businesses that sleep sometimes.
 - *Lambda Concurrency Limits:* Because even fraud fighters need a budget (prevents $10k surprises).
 
