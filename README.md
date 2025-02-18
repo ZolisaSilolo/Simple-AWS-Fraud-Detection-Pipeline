@@ -41,7 +41,7 @@ ascii
 | *DynamoDB TTL*      | Automatically deletes old fraud records. GDPR compliance: unlocked.             |
 
 ## 🛠 Installation: For When You’re Ready to Stop the Bleeding
-
+"As the AWS saying goes, "STEP FUNCTIONS FIRST, STEP FUNCTIONS ALWAYS"
 *Prerequisites:*
 - AWS Account (with permissions, not your cousin's login)
 - SageMaker Model (We included a [starter model](MODEL.md)—no PhD required)
