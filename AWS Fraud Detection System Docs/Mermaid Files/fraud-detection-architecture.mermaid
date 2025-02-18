@@ -1,0 +1,45 @@
+flowchart LR
+    subgraph Client
+        Trans[Transaction Request]
+    end
+
+    subgraph "Ingestion Layer"
+        API[API Gateway]
+        Lambda[Ingestion Lambda]
+        Kinesis[Kinesis Data Stream\nON_DEMAND mode]
+    end
+
+    subgraph "Storage Layer"
+        S3F[Feature Store S3\nLifecycle Policy]
+        style S3F fill:#f9f,stroke:#333
+        S3M[Model Store S3\nVersioning Enabled]
+        style S3M fill:#f9f,stroke:#333
+    end
+
+    subgraph "ML Infrastructure"
+        SageMaker[SageMaker Endpoint\nml.t2.medium]
+        style SageMaker fill:#90EE90,stroke:#333
+    end
+
+    subgraph "Response System"
+        DDB[(DynamoDB\nFraud Transactions)]
+        style DDB fill:#FFB6C1,stroke:#333
+        SNS[SNS Topic\nFraud Alerts]
+        style SNS fill:#FFB6C1,stroke:#333
+    end
+
+    Trans -->|POST /transactions| API
+    API -->|Invoke| Lambda
+    Lambda -->|Stream Data| Kinesis
+    Kinesis -->|Store Features| S3F
+    S3F -->|Train/Update| SageMaker
+    S3M -->|Model Artifacts| SageMaker
+    Kinesis -->|Real-time Inference| SageMaker
+    SageMaker -->|Flagged Transactions| DDB
+    DDB -->|Trigger Alerts| SNS
+    SNS -->|Notify| Team[Security Team]
+    SNS -->|Notify| Apps[Mobile Apps]
+    SNS -->|Notify| Email[Email]
+
+    classDef aws fill:#FF9900,stroke:#333,stroke-width:2px;
+    class API,Lambda,Kinesis,S3F,S3M,SageMaker,DDB,SNS aws;

@@ -1,0 +1,18 @@
+flowchart TD
+    A[Transaction] -->|1. Submit| B[API Gateway]
+    B -->|2. Process| C[Lambda]
+    C -->|3. Stream| D[Kinesis]
+    D -->|4. Store| E[Feature Store]
+    D -->|5. Analyze| F[SageMaker]
+    F -->|6. Detect Fraud| G{Fraud?}
+    G -->|Yes| H[DynamoDB]
+    H -->|7. Alert| I[SNS]
+    G -->|No| J[Continue]
+    
+    classDef process fill:#90EE90,stroke:#333;
+    classDef storage fill:#FF9900,stroke:#333;
+    classDef decision fill:#FFB6C1,stroke:#333;
+    
+    class B,C,F process;
+    class D,E,H storage;
+    class G decision;

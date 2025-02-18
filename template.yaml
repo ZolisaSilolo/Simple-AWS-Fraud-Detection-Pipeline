@@ -1,0 +1,229 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS Cloud-Native Fraud Detection Pipeline
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: fraud-detection
+    Description: Environment name for resource tagging
+
+Resources:
+  # Data Ingestion - Handles real-time transaction data ingestion
+  IngestionStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      Name: !Sub ${EnvironmentName}-transaction-stream
+      ShardCount: 2 # Initial shard count. Monitor and adjust based on throughput. Consider autoscaling for production.
+      RetentionPeriodHours: 24 # Retention period for Kinesis data. Adjust based on requirements.
+
+  IngestionLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: kinesis-access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kinesis:PutRecord
+                  - kinesis:PutRecords
+                Resource: !GetAtt IngestionStream.Arn # Limit Kinesis access to the specific stream
+        - PolicyName: lambda-basic
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*' # Standard Lambda logging permissions
+
+  IngestionLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub ${EnvironmentName}-ingestion
+      Runtime: python3.9
+      Handler: index.handler
+      Role: !GetAtt IngestionLambdaRole.Arn
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          kinesis = boto3.client('kinesis')
+          def handler(event, context):
+              # Process API Gateway payload
+              transaction_data = json.loads(event['body'])
+              # Push to Kinesis
+              response = kinesis.put_record(
+                  StreamName= !Ref IngestionStream, # Corrected: Using !Ref to get the stream name from CloudFormation
+                  Data=json.dumps(transaction_data),
+                  PartitionKey="partition_key" # Static partition key - consider dynamic key based on transactionId or accountId for better shard distribution
+              )
+              return {'statusCode': 200, 'body': 'Data ingested successfully'}
+      # Consider deploying Lambda code from S3 for larger deployments and version control
+
+  IngestionApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub ${EnvironmentName}-ingestion-api
+      Description: API for transaction ingestion
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+          # Regional endpoint is generally preferred
+
+  ApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref IngestionApi
+      ParentId: !GetAtt IngestionApi.RootResourceId
+      PathPart: transactions
+
+  ApiMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref IngestionApi
+      ResourceId: !Ref ApiResource
+      HttpMethod: POST
+      AuthorizationType: NONE # For production, consider API keys, IAM authorization, or Cognito Authorizer
+      Integration:
+        Type: AWS_PROXY # Using Lambda proxy integration for simplicity
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${IngestionLambda.Arn}/invocations
+
+  # Feature Storage - S3 bucket to store raw and processed features
+  FeatureStoreBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${EnvironmentName}-feature-store-${AWS::AccountId}
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldFeatures
+            Status: Enabled
+            ExpirationInDays: 365 # Adjust retention period based on feature engineering and cost optimization. Consider parameterizing.
+            Prefix: raw/ # Apply lifecycle rule to raw feature data
+
+  # Model Infrastructure - Resources for model hosting and management
+  ModelBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${EnvironmentName}-models-${AWS::AccountId}
+      AccessControl: Private # Secure bucket for storing model artifacts
+
+  SageMakerExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sagemaker.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SageMakerAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:Get*
+                  - s3:Put*
+                  - s3:List*
+                Resource:
+                  # Limit S3 access to Model and Feature Store buckets
+                  - !Sub ${ModelBucket.Arn}/*
+                  - !Sub ${FeatureStoreBucket.Arn}/*
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*' # Standard SageMaker logging permissions
+
+  # Fraud Detection - SageMaker endpoint for real-time fraud prediction
+  FraudDetectionEndpoint:
+    Type: AWS::SageMaker::Endpoint
+    DependsOn: FraudDetectionEndpointConfig
+    Properties:
+      EndpointName: !Sub ${EnvironmentName}-fraud-detection
+      EndpointConfigName: !Ref FraudDetectionEndpointConfig
+
+  FraudDetectionEndpointConfig:
+    Type: AWS::SageMaker::EndpointConfig
+    Properties:
+      ProductionVariants:
+        - InitialInstanceCount: 1
+          InitialVariantWeight: 1
+          InstanceType: ml.t2.medium # Instance type for endpoint. Choose based on performance and cost requirements. ml.t2.medium is for testing.
+          ModelName: !Ref FraudDetectionModel
+          VariantName: AllTraffic
+
+  FraudDetectionModel:
+    Type: AWS::SageMaker::Model
+    Properties:
+      ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
+      PrimaryContainer:
+        Image: !Sub 763104351884.dkr.ecr.${AWS::Region}.amazonaws.com/xgboost:latest # Using pre-built XGBoost image. Customize for specific model needs.
+        ModelDataUrl: !Sub s3://${ModelBucket}/model.tar.gz # S3 location of the trained model artifact
+
+  # Fraud Response - DynamoDB to track fraud and SNS for alerts
+  TransactionTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: FraudTransactions # Consider parameterizing table name with environment name for consistency: !Sub ${EnvironmentName}-FraudTransactions
+      AttributeDefinitions:
+        - AttributeName: transactionId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: transactionId
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST # Pay-per-request billing for cost optimization with variable traffic
+
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: FraudAlerts # Consider parameterizing topic name with environment name for consistency: !Sub ${EnvironmentName}-FraudAlerts
+
+  ResponseLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: fraud-response-access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:UpdateItem
+                  - sns:Publish
+                Resource:
+                  # Limit access to specific DynamoDB table and SNS topic
+                  - !GetAtt TransactionTable.Arn
+                  - !Ref AlertTopic
+
+Outputs:
+  IngestionApiUrl:
+    Value: !Sub https://${IngestionApi}.execute-api.${AWS::Region}.amazonaws.com/prod/transactions
+  FeatureBucketName:
+    Value: !Ref FeatureStoreBucket
+  ModelBucketName:
+    Value: !Ref ModelBucket
+  AlertTopicArn:
+    Value: !Ref AlertTopic
