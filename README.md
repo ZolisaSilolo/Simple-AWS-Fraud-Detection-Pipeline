@@ -51,7 +51,7 @@ ascii
 
 bash
 # 1. Clone this repo (because copy-pasting code from the internet is how breaches happen)
-git clone https://github.com/your-repo/aws-fraud-detector.git
+git clone https://github.com/ZolisaSilolo/Simple-AWS-Fraud-Detection-Pipeline
 
 # 2. Deploy CloudFormation stack
 aws cloudformation create-stack --stack-name FraudFighter9000 --template-body file://pipeline.yaml
