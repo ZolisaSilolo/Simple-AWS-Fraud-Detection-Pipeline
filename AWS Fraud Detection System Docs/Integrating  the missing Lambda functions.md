@@ -1,9 +1,6 @@
 Let's integrate the missing Lambda functions and dynamic partition keys into the CloudFormation template. We'll add a PredictionLambda to invoke the SageMaker endpoint and a ResponseLambda to handle the results.
 below is the code:
 
-AWSTemplateFormatVersion: '2010-09-09'
-Description: AWS Cloud-Native Fraud Detection Pipeline
-
 Parameters:
   EnvironmentName:
     # ... (Existing parameters)
@@ -111,7 +108,9 @@ Resources:
   # ... (Existing Outputs)
 
 ----
-Key Changes and Explanations:
+These are the key changes you should make after to the original template
+after you build &deploy the Sagemaker model through an endpoint
+followed by Explanations:
 
 PredictionLambda: This Lambda function is triggered by the Kinesis stream. It retrieves records, invokes the SageMaker endpoint, and asynchronously invokes ResponseLambda. Asynchronous invocation is crucial for decoupling and scalability.
 
