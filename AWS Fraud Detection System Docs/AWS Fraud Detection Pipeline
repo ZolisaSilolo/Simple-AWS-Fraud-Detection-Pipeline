@@ -121,7 +121,7 @@ TransactionTable:
 ### Quick Start
 ```bash
 # 1. Clone repository
-git clone https://github.com/your-repo/Simple-AWS-Fraud-Detection-Pipeline.git
+git clone https://github.com/ZolisaSilolo/Simple-AWS-Fraud-Detection-Pipeline.git
 cd Simple-AWS-Fraud-Detection-Pipeline
 
 # Install dependencies
