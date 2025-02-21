@@ -1,5 +1,8 @@
-Let's integrate the missing Lambda functions and dynamic partition keys into the CloudFormation template. We'll add a PredictionLambda to invoke the SageMaker endpoint and a ResponseLambda to handle the results.
-below is the code:
+Fraud Detection CloudFormation Template
+
+“Let’s integrate the missing Lambda functions and dynamic partition keys into the CloudFormation template. We’ll add a PredictionLambda to invoke the SageMaker endpoint and a ResponseLambda to handle the results.
+
+Below is the code:
 
 Parameters:
   EnvironmentName:
@@ -107,20 +110,17 @@ Resources:
 
   # ... (Existing Outputs)
 
-----
-These are the key changes you should make after to the original template
-after you build &deploy the Sagemaker model through an endpoint
-followed by Explanations:
+Key Changes & Explanations
+	•	PredictionLambda:
+This Lambda function is triggered by the Kinesis stream. It retrieves records, invokes the SageMaker endpoint, and asynchronously invokes ResponseLambda. Asynchronous invocation is crucial for decoupling and scalability.
+	•	ResponseLambda:
+Handles the prediction result. If fraud is detected, it stores the transaction in DynamoDB and publishes an alert to SNS.
+	•	PredictionLambdaRole:
+A new IAM role with permissions to read from Kinesis and invoke the SageMaker endpoint.
+	•	PredictionLambdaEventSourceMapping:
+This resource connects the PredictionLambda to the Kinesis stream, enabling event-driven invocation.
 
-PredictionLambda: This Lambda function is triggered by the Kinesis stream. It retrieves records, invokes the SageMaker endpoint, and asynchronously invokes ResponseLambda. Asynchronous invocation is crucial for decoupling and scalability.
-
-ResponseLambda: Handles the prediction result. If fraud is detected, it stores the transaction in DynamoDB and publishes an alert to SNS.
-
-PredictionLambdaRole: A new IAM role with permissions to read from Kinesis and invoke the SageMaker endpoint.
-
-PredictionLambdaEventSourceMapping: This resource connects the PredictionLambda to the Kinesis stream, enabling event-driven invocation.
-
-Dynamic Partition Key (In IngestionLambda):
+Dynamic Partition Key (In IngestionLambda)
 
 partition_key = transaction_data.get('transactionId', 'default_key') # Use transactionId if available, otherwise a default
 response = kinesis.put_record(
@@ -128,12 +128,14 @@ response = kinesis.put_record(
     PartitionKey=partition_key
 )
 
-This uses the transactionId (if present in the incoming data) as the partition key. Provide a default if it's missing. This is a basic example; more sophisticated key generation strategies might be beneficial.
+This uses the transactionId (if present in the incoming data) as the partition key. Provide a default if it’s missing. This is a basic example; more sophisticated key generation strategies might be beneficial.
 
-Model Endpoint Name: I recommend passing the SageMaker endpoint name to the PredictionLambda via environment variables. This promotes better decoupling and makes the Lambda function more reusable.
+Model Endpoint Name
 
-Deployment & Testing:
+I recommend passing the SageMaker endpoint name to the PredictionLambda via environment variables. This promotes better decoupling and makes the Lambda function more reusable.
+
+Deployment & Testing
 
 After deploying this updated template, test the pipeline by sending transaction data to the API Gateway endpoint. Monitor CloudWatch logs for all Lambda functions to debug any issues. Ensure data is flowing through Kinesis, predictions are being made, and responses are being handled correctly. Verify DynamoDB entries and SNS alerts for fraudulent transactions.
 
-This revised solution provides a more complete and robust fraud detection pipeline. Remember to replace placeholder values (like prediction.handler and the model's output format) with your specific implementation details. Consider adding more advanced error handling and security measures as you move towards production.
+This revised solution provides a more complete and robust fraud detection pipeline. Remember to replace placeholder values (like prediction.handler and the model’s output format) with your specific implementation details. Consider adding more advanced error handling and security measures as you move towards production.
